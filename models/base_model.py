@@ -6,6 +6,7 @@ from . import network
 from thop import profile
 
 
+# class BaseModel(ABC,torch.nn.Module):
 class BaseModel(ABC):
     """This class is an abstract base class (ABC) for models.
     """
@@ -13,6 +14,8 @@ class BaseModel(ABC):
     def __init__(self, opt):
         """Initialize the BaseModel class.
         """
+        # super(BaseModel, self).__init__()
+
         self.opt = opt
         self.gpu_ids = opt.gpu_ids
         self.isTrain = opt.isTrain
@@ -58,9 +61,15 @@ class BaseModel(ABC):
         """
         if self.isTrain:
             self.schedulers = [network.get_scheduler(optimizer, opt) for optimizer in self.optimizers]
+        if opt.serial_train:
+            load_suffix = '%d' % opt.load_iter if opt.load_iter > 0 else opt.epoch
+            self.load_custom_networks_serial(load_suffix)  # 用一个可以重写的方法代替直接加载
+
         if not self.isTrain or opt.continue_train:
-            load_suffix = 'iter_%d' % opt.load_iter if opt.load_iter > 0 else opt.epoch
-            self.load_networks(load_suffix)
+            load_suffix = '%d' % opt.load_iter if opt.load_iter > 0 else opt.epoch
+            # self.load_networks(load_suffix)
+            # self.load_Integ_networks(load_suffix)
+            self.load_custom_networks(load_suffix)  # 用一个可以重写的方法代替直接加载
         self.print_networks(opt.verbose)
         #self.diagnose_network();
 
@@ -74,21 +83,51 @@ class BaseModel(ABC):
         for name in self.model_names:
             if isinstance(name, str):
                 load_filename = '%s_net_%s.pth' % (epoch, name)
+                self.save_dir = os.path.normpath(self.save_dir)
                 load_path = os.path.join(self.save_dir, load_filename)
                 net = getattr(self, 'net' + name)
                 if isinstance(net, torch.nn.DataParallel):
                     net = net.module
                 print('loading the model from %s' % load_path)
-                # if you are using PyTorch newer than 0.4 (e.g., built from
-                # GitHub source), you can remove str() on self.device
                 state_dict = torch.load(load_path, map_location=str(self.device))
                 if hasattr(state_dict, '_metadata'):
                     del state_dict._metadata
 
-                # patch InstanceNorm checkpoints prior to 0.4
-                for key in list(state_dict.keys()):  # need to copy keys here because we mutate in loop
+                for key in list(state_dict.keys()):  
                     self.__patch_instance_norm_state_dict(state_dict, net, key.split('.'))
                 net.load_state_dict(state_dict)
+
+    def load_networks_serial(self, epoch):
+        """Load all the networks from the disk.
+
+        Parameters:
+            epoch (int) -- current epoch; used in the file name '%s_net_%s.pth' % (epoch, name)
+        """
+        for name in self.model_names:
+            if isinstance(name, str):
+                load_filename = '%s_net_%s.pth' % (epoch, name)
+                self.save_dir = os.path.normpath(self.save_dir)
+                load_path = os.path.join(self.save_dir, load_filename)
+                net = getattr(self, 'net' + name)
+                if isinstance(net, torch.nn.DataParallel):
+                    net = net.module
+                print('loading the model from %s' % load_path)
+                state_dict = torch.load(load_path, map_location=str(self.device))
+                if hasattr(state_dict, '_metadata'):
+                    del state_dict._metadata
+
+                for key in list(state_dict.keys()):  
+                    self.__patch_instance_norm_state_dict(state_dict, net, key.split('.'))
+                net.load_state_dict(state_dict)
+
+    def load_custom_networks(self, load_suffix):
+        # 默认行为是加载标准网络
+        self.load_networks(load_suffix)
+
+    def load_custom_networks_serial(self, load_suffix):
+        # 默认行为是加载标准网络
+        self.load_networks_serial(load_suffix)
+
 
     def print_networks(self, verbose):
         """Print the total number of parameters in the network and (if verbose) network architecture
@@ -141,17 +180,41 @@ class BaseModel(ABC):
                 errors_ret[name] = float(getattr(self, 'loss_' + name))  # float(...) works for both scalar tensor and float number
         return errors_ret
 
-    def save_networks(self, epoch):
+    # def save_networks(self, epoch):
+    #     """Save all the networks to the disk.
+    #
+    #     Parameters:
+    #         epoch (int) -- current epoch; used in the file name '%s_net_%s.pth' % (epoch, name)
+    #     """
+    #     for name in self.model_names:
+    #         if isinstance(name, str):
+    #             save_filename = '%s_net_%s.pth' % (epoch, name)
+    #             #self.save_dir = os.path.join(opt.checkpoints_dir, opt.name)  sabe_path=./checkpoints/unet_b002
+    #             save_path = os.path.join(self.save_dir, save_filename)
+    #             net = getattr(self, 'net' + name)
+    #
+    #             if len(self.gpu_ids) > 0 and torch.cuda.is_available():
+    #                 torch.save(net.module.cpu().state_dict(), save_path)
+    #                 net.cuda(self.gpu_ids[0])
+    #             else:
+    #                 torch.save(net.cpu().state_dict(), save_path)
+
+    def save_networks(self, epoch, networkname=None):
         """Save all the networks to the disk.
 
         Parameters:
             epoch (int) -- current epoch; used in the file name '%s_net_%s.pth' % (epoch, name)
+            name (str or None) -- name of the subnetwork; if None, default names will be used
+            :param networkname: name of current network model
         """
-        for name in self.model_names:
-            if isinstance(name, str):
-                save_filename = '%s_net_%s.pth' % (epoch, name)
+        for model_name in self.model_names:
+            if isinstance(model_name, str):
+                if networkname is None:
+                    save_filename = '%s_net_%s.pth' % (epoch, model_name)
+                else:
+                    save_filename = '%s_%s_net_%s.pth' % (networkname, epoch, model_name)
                 save_path = os.path.join(self.save_dir, save_filename)
-                net = getattr(self, 'net' + name)
+                net = getattr(self, 'net' + model_name)
 
                 if len(self.gpu_ids) > 0 and torch.cuda.is_available():
                     torch.save(net.module.cpu().state_dict(), save_path)
