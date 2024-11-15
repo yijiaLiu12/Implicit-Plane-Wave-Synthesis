@@ -32,7 +32,7 @@ For this stage, you will train separate networks for the left and right angles. 
 
 While training the first stage network, the second stage fusion network can be trained simultaneously. This step is executed by running `trainMAT_stage2.py`. The trained model for this stage will be saved automatically under the `tribranch_stage2` folder in the `checkpoints` directory.
 
-### 2. Moving from Parallel to Serial Training
+### 2. Serial Training
 
 Once the networks in both the left and right angles are trained and stable in Stage 1 and Stage 2, you need to prepare for serial training:
 
