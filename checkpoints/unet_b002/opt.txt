@@ -1,0 +1,31 @@
+----------------- Options ---------------
+             aspect_ratio: 1.0                           
+               batch_size: 1                             
+          checkpoints_dir: ./checkpoints                 
+                    epoch: best                          
+                     eval: True                          
+                  gpu_ids: 0                             
+                init_gain: 0.02                          
+                init_type: normal                        
+                 input_nc: 1                             
+                  isTrain: False                         	[default: None]
+                     load: ./img_data                    
+                load_iter: 0                             	[default: 0]
+                load_size: None                          
+                    model: test                          
+             model_suffix:                               
+               n_layers_D: 3                             
+                     name: unet_b002                     
+                      ndf: 64                            
+                     netD: basic                         
+                     netG: unet_128                      
+                      ngf: 64                            
+               no_dropout: False                         
+                     norm: instance                      
+                 num_test: 50                            
+                output_nc: 1                             
+                    phase: test                          
+              results_dir: ./results/                    
+                   suffix:                               
+                  verbose: False                         
+----------------- End -------------------
